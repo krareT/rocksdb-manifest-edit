@@ -1,0 +1,9 @@
+[submodule "rocksdb"]
+	path = rocksdb
+	url = git@github.com:Terark/rocksdb.git
+[submodule "terark-zip-rocksdb"]
+	path = terark-zip-rocksdb
+	url = git@github.com:Terark/terark-zip-rocksdb.git
+[submodule "terichdb"]
+	path = terichdb
+	url = git@github.com:Terark/terichdb.git
