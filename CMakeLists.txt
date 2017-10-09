@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(rocksdb_manifest_dump)
+project(rocksdb_manifest_edit)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_BUILD_TYPE RELEASE)
@@ -26,6 +26,6 @@ set(SOURCE_FILES
         src/manifest_process.cpp
         src/main.cpp)
 
-add_executable(rocksdb_manifest_dump ${SOURCE_FILES})
+add_executable(rocksdb_manifest_edit ${SOURCE_FILES})
 
-TARGET_LINK_LIBRARIES(rocksdb_manifest_dump rocksdb)
+TARGET_LINK_LIBRARIES(rocksdb_manifest_edit rocksdb)
