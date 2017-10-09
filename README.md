@@ -1,4 +1,4 @@
-# rocksdb-manifest-dump
+# rocksdb-manifest-edit
 
 ## Note
 
@@ -9,13 +9,13 @@
 ## 使用
 
 ```shell
-git clone https://github.com/terark/rocksdb-manifest-dump.git
-cd rocksdb-manifest-dump
+git clone https://github.com/terark/rocksdb-manifest-edit.git
+cd rocksdb-manifest-edit
 git submodule init
 git submodule update
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . --target rocksdb_manifest_dump -- -j 4
+cmake --build . --target rocksdb_manifest_edit -- -j 4
 ```
 
 ## 选项
@@ -29,6 +29,6 @@ cmake --build . --target rocksdb_manifest_dump -- -j 4
 example:
 
 ```shell
-./rocksdb_manifest_dump --json --jpath=/tmp/manifest.json --mpath=/usr/local/mysql/data/.rocksdb/MANIFEST-000315
+./rocksdb_manifest_edit --json --jpath=/tmp/manifest.json --mpath=/usr/local/mysql/data/.rocksdb/MANIFEST-000315
 ```
 
