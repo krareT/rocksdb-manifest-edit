@@ -15,7 +15,7 @@ git submodule init
 git submodule update
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . --target rocksdb_manifest_dump -- -j 2
+cmake --build . --target rocksdb_manifest_dump -- -j 4
 ```
 
 ## 选项
