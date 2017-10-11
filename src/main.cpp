@@ -20,20 +20,6 @@ void print_help() {
     fprintf(stderr, "%-12s %-s\n", "--help", "print help information");
 }
 
-std::vector<std::string> split(std::string str, char split_char) {
-  std::string s = "";
-  std::vector<std::string> split_str;
-  split_str.clear();
-  for (decltype(str.length()) i = 0; i < str.length(); ++i) {
-    if (str[i] != split_char) s += str[i];
-    if (str[i] == split_char || (i + 1) == str.length()) {
-      split_str.emplace_back(s);
-      s = "";
-    }
-  }
-  return split_str;
-};
-
 int main(int argc, char** argv) {
     if (argc < 2) {
         print_help();
@@ -56,9 +42,9 @@ int main(int argc, char** argv) {
         } else if (command.length() > 7) {
             std::string temp = command.substr(0, 7);
             if (temp == "--jpath") {
-                json_path = split(command, '=')[1];
+                json_path = terark::split(command, '=')[1];
             } else if (temp == "--mpath") {
-                manifest_path = split(command, '=')[1];
+                manifest_path = terark::split(command, '=')[1];
             } else {
                 fprintf(stderr, "Invalid Option: %s\n\n", command.c_str());
                 print_help();
@@ -76,7 +62,7 @@ int main(int argc, char** argv) {
     if (type == JSON) {
         std::fstream f(manifest_path);
         if (!f) {
-            fprintf(stderr, "%s can not open as a file", json_path.c_str());
+            fprintf(stderr, "%s can not open as a file\n", manifest_path.c_str());
             f.close();
             exit(1);
         }
@@ -85,7 +71,7 @@ int main(int argc, char** argv) {
     } else {
         std::fstream f(json_path);
         if (!f) {
-            fprintf(stderr, "%s can not open as a file", json_path.c_str());
+            fprintf(stderr, "%s can not open as a file\n", json_path.c_str());
             f.close();
             exit(1);
         }
@@ -103,7 +89,7 @@ int main(int argc, char** argv) {
                                &writeController);
         s = terark::ManifestProcess().TransToManifestFromJson(manifest_path, json_path, rocksdb::Env::Default(), &vs);
     }
-    if (s.ok()) printf("Success!");
+    if (s.ok()) puts("Success!");
     else fprintf(stderr, "%s\n", s.ToString().c_str());
     return 0;
 }

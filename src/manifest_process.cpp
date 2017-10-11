@@ -9,6 +9,20 @@
 
 namespace terark {
 
+std::vector<std::string> split(std::string str, char split_char) {
+  std::string s = "";
+  std::vector<std::string> split_str;
+  split_str.clear();
+  for (decltype(str.length()) i = 0; i < str.length(); ++i) {
+    if (str[i] != split_char) s += str[i];
+    if (str[i] == split_char || (i + 1) == str.length()) {
+      split_str.emplace_back(s);
+      s = "";
+    }
+  }
+  return split_str;
+}
+
 terark::json ManifestProcess::VersionEditToJson(rocksdb::VersionEdit &edit) {
     terark::json j;
     if (edit.is_has_comparator()) j["kComparator"] = edit.get_comparator();
@@ -57,19 +71,6 @@ terark::json ManifestProcess::VersionEditToJson(rocksdb::VersionEdit &edit) {
 }
 
 std::string ManifestProcess::getInternalKey(std::string key) {
-    auto split = [](std::string str, char split_char) {
-        std::string s = "";
-        std::vector<std::string> split_str;
-        split_str.clear();
-        for (decltype(str.length()) i = 0; i < str.length(); ++i) {
-            if (str[i] != split_char) s += str[i];
-            if (str[i] == split_char || (i + 1) == str.length()) {
-                split_str.emplace_back(s);
-                s = "";
-            }
-        }
-        return split_str;
-    };
     auto toDec = [](char num) {
         if (num >= 'A') return static_cast<int>(num - 'A' + 10);
         else return static_cast<int>(num - '0');

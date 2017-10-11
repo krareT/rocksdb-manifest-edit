@@ -12,6 +12,8 @@
 
 namespace terark {
 
+extern std::vector<std::string> split(std::string str, char split_char);
+
 class ManifestProcess {
 public:
     std::string getInternalKey(std::string key);
