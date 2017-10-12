@@ -2,17 +2,17 @@
 
 ## 从 RocksDB 说起
 
-RocksDB 是 Facebook 开源的一个嵌入式 key-value 数据库存储引擎，其键和值是任意的字节流。RocksDB 基于 Google 开源的 LevelDB，并在此基础上加以改进。它支持高效的查找和范围查询，支持高负载的随机读、高负载的更新操作或两者的结合。
+RocksDB 是 Facebook 基于 Google 开源的 LevelDB，并在此基础上加以改进并开源的一个嵌入式 key-value 数据库存储引擎，其键和值是任意的字节流，它支持高效的查找和范围查询，支持高负载的随机读、高负载的更新操作或两者的结合。
 
 RocksDB 是基于 LSM tree 存储的，其包含三个基本结构：MemTable，SST file，log file。其中 MemTable 是一个内存数据结构，每当有新的数据插入时，会被插入到 MemTable 和可选的 logfile 中，当 MemTable 被写满的时候，其中的数据会被刷新到 SST file 中。而 SST file 中的数据经过排序，可以加快键的查找。
 
-每当有一个读操作的时候，系统会首先检查内存中的 MemTable，如果没有找到这个键，那么就会逆序的检查每一个 SST file，直到键被找到。但是读操作会随着 SST file 个数增加而变慢，通过周期性的合并文件，来保持 SST file 的个数。
+每当有一个读操作的时候，系统会首先检查内存中的 MemTable，如果没有找到这个键，那么就会逆序的检查每一个 SST file，直到键被找到。但是读操作会随着 SST file 个数增加而变慢，RocksDB 通过周期性的合并文件，来保持 SST file 的个数。
 
-RocksDB 支持多线程合并，而 LevelDB 是单线程合并的。LSM 型的数据结构，最大的性能问题就出现在其合并的时间损耗上，在多 CPU 的环境下，多线程合并速度是 LevelDB 所无法比拟的，速度可以快十倍。MANIFEST 文件记录数据库的状态，每次 Compaction 在添加新文件和删除文件之后，都会将这些操作记录同步到 MANIFEST 文件中。
+不同于 LevelDB 的单线程合并，RocksDB 支持多线程合并，而LSM 型的数据结构，最大的性能问题就出现在其合并的时间损耗上。RocksDB 在多 CPU 的环境下，多线程合并速度是 LevelDB 所无法比拟的，其速度可以比 LevelDB 快十倍或更多。每次在添加新文件和删除文件之后合并的时候，都会将这些操作记录同步到 MANIFEST 文件中，所以 MANIFEST 文件中记录了数据库的状态。
 
 ## MANIFEST 文件
 
-因为文件系统不是原子性的，而这在系统出错的情况下容易导致不一致的情况出现，即使是开启了日志，文件系统在不重新启动的情况下依旧不能保证一致性，且 POSIX 文件系统不支持原子的批量操作，所以 RocksDB 使用 MANIFEST 文件来保持 RocksDB 状态变化的事务性日志。
+因为 RocksDB 的文件系统不是原子性的，而这在系统出错的情况下容易导致不一致的情况出现，即使是开启了日志，依旧不能保证 RocksDB 的一致性，且 POSIX 文件系统不支持原子的批量操作，所以其使用 MANIFEST 文件来记录 RocksDB 状态的变化。
 
 在系统启动或者重启时，最新的 MANIFEST 日志文件包含与 RocksDB 一致的状态，任何一个后来的状态改变都会被写入到 MANIFEST 日志文件中。当一个 MANIFEST 文件超过了配置的最大值的时候，一个包含当前 RocksDB 状态信息的新的 MANIFEST 文件就会创建，CURRENT 文件会记录最新的 MANIFEST 文件信息。当所有的更改都同步到文件系统之后，之前老的 MANIFEST 文件就会被清除。
 
@@ -22,7 +22,7 @@ RocksDB 支持多线程合并，而 LevelDB 是单线程合并的。LSM 型的�
 
 RocksDB 的一致性完全依赖于 MANIFEST 文件，一旦 MANIFEST 文件出错或丢失，那么整个数据库便只能作废。在 RocksDB 运行正常自然是一切都好，但是一旦出现错误，MANIFEST 文件出错，那么在RocksDB自身没有提供修复 MANIFEST 文件的情况下，我们只能自行去进行修复。
 
-RocksDB 本身实际上提供了一个修复 MANIFEST 的方式，就是使用 ldb 的子命令 repair 来修复 MANIFEST 文件，但是这个方法，只能解决 MANIFEST 损坏或者丢失的情况。如果出现 SST file 丢失或损坏的情况，即使 MANIFEST 没有任何损坏，依旧会导致 RocksDB 无法运行。所以我们需要有能够修复修改 MANIFEST 文件的能力。
+RocksDB 本身实际上提供了一个修复 MANIFEST 的方式，就是使用 ldb 的子命令 repair 来修复 MANIFEST 文件，但是这个方法，只能解决 MANIFEST 损坏或者丢失的情况，且不能保证解决所有情况。如果出现 SST file 丢失或损坏的情况，即使 MANIFEST 没有任何损坏，依旧会导致 RocksDB 无法运行。所以我们需要有能够修复修改 MANIFEST 文件的能力。
 
 因为要有修复修改 MANIFEST 文件的能力，所以必须要先知道 MANIFEST 文件内部存储的信息是什么，是怎样存储的，这样就必须要解析出 MANIFEST 文件。在知道 MANIFEST 文件存储的信息是什么之后，我们才能通过修改这些信息并将这些信息写回 MANIFEST文件的方式，获得修复修改 MANIFEST 文件的能力。
 
