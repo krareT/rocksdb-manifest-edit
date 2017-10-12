@@ -22,13 +22,16 @@ cmake --build . --target rocksdb_manifest_edit -- -j 4
 
 - --json: 设置程序将manifest转为json格式的文件(默认)
 - --manifest: 设置程序将json格式的文件转换成manifest文件
-- --jpath: json格式文件地址（必须是完整地址）
-- --mpath: manifest格式文件地址（必须是完整地址）
+- --batch: 批量将json格式的文件转换为manifest文件或批量将manifest文件转换成json格式文件
+- --jpath: json格式文件地址，在指定了--batch之后，必须是一个目录，如果指定了--manifest，则目录必须仅包含json格式的文件
+- --mpath: manifest格式文件地址，在指定了--batch之后，必须是一个目录，如果指定了--json，则目录必须仅包含manifest文件
 - --help: 打印帮助信息
 
 example:
 
 ```shell
 ./rocksdb_manifest_edit --json --jpath=/tmp/manifest.json --mpath=/usr/local/mysql/data/.rocksdb/MANIFEST-000315
+
+./rocksdb_manifest_edit --manifest --batch --jpath=/tmp/json --mpath=/tmp/manifest
 ```
 
