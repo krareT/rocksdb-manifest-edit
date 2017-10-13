@@ -50,6 +50,10 @@ RocksDB 本身实际上提供了一个修复 MANIFEST 的方式，就是使用 l
 
 写入到 MANIFEST 文件并不是一件简单的事情，如果直接将 VersionEdit 编码完成的二进制字符串写入到 MANIFEST 文件中实际上会造成 MANIFEST 文件信息的部分丢失，所以采用 RocksDB 中自有的方法。利用 VersionSet 中的 `log_descriptor` 的 `AddRecord()` 方法先将每个 VersionEdit 编码后的二进制字符串记录，等所有的 VersionEdit 编码完成后，使用 `SyncManifest()` 函数便可以将所有的记录写入到 MANIFEST 文件中。
 
+## 其它功能
+
+在实际使用这个工具的时候，我们可能不止是需要解析一个 MANIFEST 文件，一个个去解析的话，因为需要给定参数，未免会有些麻烦。所以我们提供了一个批量解析的方式。这个方式首先会检查给定的目录下的所有文件，然后顺次执行，一旦出错便会停止，全部成功后便可得到所有与原文件名称类似的文件。
+
 ## 总结
 
 尽管 RocksDB 是一个非常优秀、性能非常突出的数据库存储引擎，但是因为其文件系统不是原子性的，POSIX 系统也不支持原子的批量操作，所以 RocksDB 并不会将自己的一些元数据存放到自己的 key-value 系统里面，而是使用了单独的一个 MANIFEST 文件。而当 MANIFEST 文件出错，或者是 SST file 出错的情况下，如果我们没有能够修改修复 MANIFEST 文件的能力，那么就会使得 RocksDB 中存储的所有数据都会作废。这是我们所不能接受的。
