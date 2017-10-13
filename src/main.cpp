@@ -30,7 +30,7 @@ rocksdb::Status process_translate(std::string& source_file, std::string& target_
     f.close();
     if (!s.ok()) return s;
     if (type == JSON) {
-        s = terark::ManifestProcess().TransToJsonFromManifest(source_file, target_file, rocksdb::Env::Default());
+        s = terark::ManifestProcess().TransToJsonFromManifest(source_file, target_file + ".json", rocksdb::Env::Default());
     } else {
         rocksdb::DBOptions db_options;
         rocksdb::ImmutableDBOptions immutable_db_options(db_options);
@@ -43,6 +43,8 @@ rocksdb::Status process_translate(std::string& source_file, std::string& target_
                                &immutable_db_options, env_options,
                                cache.get(), immutable_db_options.write_buffer_manager.get(),
                                &writeController);
+        int position = target_file.find_last_of('.');
+        target_file = target_file.substr(0, position);
         s = terark::ManifestProcess().TransToManifestFromJson(target_file, source_file, rocksdb::Env::Default(), &vs);
     }
     return s;
@@ -70,7 +72,7 @@ rocksdb::Status batch_process_translate(std::string& source_dir, std::string& ta
         if (!strcmp(filename->d_name, ".") || !strcmp(filename->d_name, ".."))
             continue;
         std::string source_file = source_dir + std::string(filename->d_name);
-        std::string target_file = target_dir + std::string(filename->d_name) + ".json";
+        std::string target_file = target_dir + std::string(filename->d_name);
         s = process_translate(source_file, target_file, type);
         if (!s.ok()) return s;
     }
