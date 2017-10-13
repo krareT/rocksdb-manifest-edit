@@ -4,15 +4,15 @@
 
 RocksDB 是 Facebook 基于 Google 开源的 LevelDB，并在此基础上加以改进并开源的一个嵌入式 key-value 数据库存储引擎，其键和值是任意的字节流，它支持高效的查找和范围查询，支持高负载的随机读、高负载的更新操作或两者的结合。
 
-RocksDB 是基于 LSM tree 存储的，其包含三个基本结构：MemTable，SST file，log file。其中 MemTable 是一个内存数据结构，每当有新的数据插入时，会被插入到 MemTable 和可选的 logfile 中，当 MemTable 被写满的时候，其中的数据会被刷新到 SST file 中。而 SST file 中的数据经过排序，可以加快键的查找。
+RocksDB 是基于 LSM tree 存储的，其包含三个基本结构：MemTable，SST file，log file。其中 MemTable 是一个内存数据结构，每当有新的数据插入时，会被插入到 MemTable 并且追加到 logfile 中，当 MemTable 被写满的时候，其中的数据会被刷新到 SST file 中。而 SST file 中的数据经过排序，可以加快键的查找。
 
-每当有一个读操作的时候，系统会首先检查内存中的 MemTable，如果没有找到这个键，那么就会逆序的检查每一个 SST file，直到键被找到。但是读操作会随着 SST file 个数增加而变慢，RocksDB 通过周期性的合并文件，来保持 SST file 的个数。
+每当有一个 `Get()` 请求的时候，RocksDB 会检查可修改的 MemTable，不变的 MemTable 和 SST file 以查找 key，其中 SST file 是通过 level 来组织的。在 level 0，SST file 是基于被刷新到文件的时间排序的，它们的键的范围（被定以为 `FileMetaData.smallest` 和 `FileMetaData.largest`）会相互重叠，所以需要查找每一个在  level 0 的 SST file。但是读操作会随着 SST file 个数增加而变慢，RocksDB 通过周期性的合并文件，来保持 SST file 的个数。
 
 不同于 LevelDB 的单线程合并，RocksDB 支持多线程合并，而LSM 型的数据结构，最大的性能问题就出现在其合并的时间损耗上。RocksDB 在多 CPU 的环境下，多线程合并速度是 LevelDB 所无法比拟的，其速度可以比 LevelDB 快十倍或更多。每次在添加新文件和删除文件之后合并的时候，都会将这些操作记录同步到 MANIFEST 文件中，所以 MANIFEST 文件中记录了数据库的状态。
 
 ## MANIFEST 文件
 
-因为 RocksDB 的文件系统不是原子性的，而这在系统出错的情况下容易导致不一致的情况出现，即使是开启了日志，依旧不能保证 RocksDB 的一致性，且 POSIX 文件系统不支持原子的批量操作，所以其使用 MANIFEST 文件来记录 RocksDB 状态的变化。
+因为文件系统不是原子性的，而这在系统出错的情况下容易导致不一致的情况出现，即使是开启了日志，依旧不能保证 RocksDB 的一致性，且 POSIX 文件系统不支持原子的批量操作，所以其使用 MANIFEST 文件来记录 RocksDB 状态的变化。
 
 在系统启动或者重启时，最新的 MANIFEST 日志文件包含与 RocksDB 一致的状态，任何一个后来的状态改变都会被写入到 MANIFEST 日志文件中。当一个 MANIFEST 文件超过了配置的最大值的时候，一个包含当前 RocksDB 状态信息的新的 MANIFEST 文件就会创建，CURRENT 文件会记录最新的 MANIFEST 文件信息。当所有的更改都同步到文件系统之后，之前老的 MANIFEST 文件就会被清除。
 
@@ -32,9 +32,9 @@ RocksDB 本身实际上提供了一个修复 MANIFEST 的方式，就是使用 l
 
 查阅 RocksDB 代码，知道实际上 MANIFEST 文件存储的是每个 VersionEdit 经过二进制编码之后的形式，所以如果想要解析 MANIFEST 文件，那么势必需要知道 VersionEdit 是怎么样编码的。不过庆幸的是，VersionEdit 提供了 `Status DecodeFrom(const Slice& src)` 这个函数，能够直接将 MANIFEST 文件的每一条记录解析到 VersionEdit。
 
-在得到 VersionEdit 之后，我们任然需要选择一个合适的格式来将 VersionEdit 变成我们可直接阅读的样子，在这里，我们选择了 JSON。因为 JSON 是一个轻量级的数据交换格式，易于人阅读和编写，也易于机器进行解析和生成。
+在得到 VersionEdit 之后，我们仍然需要选择一个合适的格式来将 VersionEdit 变成我们可直接阅读的样子，在这里，我们选择了 JSON。因为 JSON 是一个轻量级的数据交换格式，易于人阅读和编写，也易于机器进行解析和生成。
 
-生成 JSON 的时候，我们选择采用 nlohmann 开源的 json 库，使用这个库可以非常简单的利用键值对便可以生成 JSON。但是使用这个库，因为其默认使用的是 `std::map`，其默认按照键进行排序，不会保留原本设定的添加顺序，这样使得 VersionEdit 阅读起来上下文相关性极差。所以我们基于这个库，自定义了一种类型 `JsonStrMap`，这个类型能够按照添加进 json 的顺序将键值对输出，使得最后解析完成输出的 JSON 能够按照 VersionEdit 自身成员的相关性进行排序输出。这样方便了我们对每一个 VersionEdit 进行阅读。
+生成 JSON 的时候，我们选择采用 [nlohmann 开源的 json 库](https://github.com/nlohmann/json)，使用这个库可以非常简单的利用键值对便可以生成 JSON。但是使用这个库，因为其默认使用的是 `std::map`，其默认按照键进行排序，不会保留原本设定的添加顺序，这样使得 VersionEdit 阅读起来上下文相关性极差。所以我们基于这个库，自定义了一种类型 [`JsonStrMap`](https://github.com/Terark/terichdb/blob/master/src/terark/terichdb/json.hpp)，这个类型能够按照添加进 json 的顺序将键值对输出，使得最后解析完成输出的 JSON 能够按照 VersionEdit 自身成员的相关性进行排序输出。这样方便了我们对每一个 VersionEdit 进行阅读。
 
 因为 JSON 的优点所以我们选择了 JSON，如果对其它格式更加熟悉的，也可以利用工具将 JSON 转换为其它熟悉的格式，这里不提供其它可选的格式。
 
