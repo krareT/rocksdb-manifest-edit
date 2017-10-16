@@ -2,11 +2,11 @@
 
 ## 从 RocksDB 说起
 
-RocksDB 是 Facebook 基于 Google 开源的 LevelDB，并在此基础上加以改进并开源的一个嵌入式 key-value 数据库存储引擎，其键和值是任意的字节流，它支持高效的查找和范围查询，支持高负载的随机读、高负载的更新操作或两者的结合。
+RocksDB 是 Facebook 基于 Google 开源的 LevelDB，并在此基础上加以改进、开源的一个嵌入式 key-value 数据库存储引擎，其键和值是任意的字节流，它支持高效的查找和范围查询，支持高负载的随机读、高负载的更新操作或两者的结合。
 
 RocksDB 是基于 LSM tree 存储的，其包含三个基本结构：MemTable，SST file，log file。其中 MemTable 是一个内存数据结构，每当有新的数据插入时，会被插入到 MemTable 并且追加到 logfile 中，当 MemTable 被写满的时候，其中的数据会被刷新到 SST file 中。而 SST file 中的数据经过排序，可以加快键的查找。
 
-每当有一个 `Get()` 请求的时候，RocksDB 会检查可修改的 MemTable，不变的 MemTable 和 SST file 以查找 key，其中 SST file 是通过 level 来组织的。在 level 0，SST file 是基于被刷新到文件的时间排序的，它们的键的范围（被定以为 `FileMetaData.smallest` 和 `FileMetaData.largest`）会相互重叠，所以需要查找每一个在  level 0 的 SST file。但是读操作会随着 SST file 个数增加而变慢，RocksDB 通过周期性的合并文件，来保持 SST file 的个数。
+每当有一个 `Get()` 请求的时候，RocksDB 会检查可修改的 MemTable，不变的 MemTable 和 SST file 以查找 key，其中 SST file 是通过 level 来组织的。在 level 0，SST file 是基于被刷新到文件的时间排序的，它们的键的范围（被定义为 `FileMetaData.smallest` 和 `FileMetaData.largest`）会相互重叠，所以需要查找每一个在  level 0 的 SST file。但是读操作会随着 SST file 个数增加而变慢，RocksDB 通过周期性的合并文件，来保持 SST file 的个数。
 
 不同于 LevelDB 的单线程合并，RocksDB 支持多线程合并，而LSM 型的数据结构，最大的性能问题就出现在其合并的时间损耗上。RocksDB 在多 CPU 的环境下，多线程合并速度是 LevelDB 所无法比拟的，其速度可以比 LevelDB 快十倍或更多。每次在添加新文件和删除文件之后合并的时候，都会将这些操作记录同步到 MANIFEST 文件中，所以 MANIFEST 文件中记录了数据库的状态。
 
@@ -16,7 +16,7 @@ RocksDB 是基于 LSM tree 存储的，其包含三个基本结构：MemTable，
 
 在系统启动或者重启时，最新的 MANIFEST 日志文件包含与 RocksDB 一致的状态，任何一个后来的状态改变都会被写入到 MANIFEST 日志文件中。当一个 MANIFEST 文件超过了配置的最大值的时候，一个包含当前 RocksDB 状态信息的新的 MANIFEST 文件就会创建，CURRENT 文件会记录最新的 MANIFEST 文件信息。当所有的更改都同步到文件系统之后，之前老的 MANIFEST 文件就会被清除。
 
-在任意时间，RocksDB 的一个确定的状态可以被看成是一个 Version (或者说快照），每一个对 Version 的修改都可以看做是 VersionEdit，一个 Version 是由 VersionEdit 序列所构造而成。所以实际上，一个 MANIFEST 就是由 VersionEdit 序列构成的。
+在任意时间，RocksDB 的一个确定的状态可以被看成是一个 Version (或者说快照），每一个对 Version 的修改都看做是 VersionEdit，一个 Version 是由 VersionEdit 序列所构造而成。所以实际上，一个 MANIFEST 就是由 VersionEdit 序列构成的。
 
 ## 为什么要解析 MANIFEST 文件
 
@@ -56,6 +56,6 @@ RocksDB 本身实际上提供了一个修复 MANIFEST 的方式，就是使用 l
 
 ## 总结
 
-尽管 RocksDB 是一个非常优秀、性能非常突出的数据库存储引擎，但是因为其文件系统不是原子性的，POSIX 系统也不支持原子的批量操作，所以 RocksDB 并不会将自己的一些元数据存放到自己的 key-value 系统里面，而是使用了单独的一个 MANIFEST 文件。而当 MANIFEST 文件出错，或者是 SST file 出错的情况下，如果我们没有能够修改修复 MANIFEST 文件的能力，那么就会使得 RocksDB 中存储的所有数据都会作废。这是我们所不能接受的。
+尽管 RocksDB 是一个非常优秀、性能非常突出的数据库存储引擎，但是因为文件系统不是原子性的，POSIX 系统也不支持原子的批量操作，所以 RocksDB 并不会将自己的一些元数据存放到自己的 key-value 系统里面，而是使用了单独的一个 MANIFEST 文件。而当 MANIFEST 文件出错，或者是 SST file 出错的情况下，如果我们没有能够修改修复 MANIFEST 文件的能力，那么就会使得 RocksDB 中存储的所有数据都会作废。这是我们所不能接受的。
 
 所以编写这个项目，使得我们具备了修改修复 MANIFEST 文件的能力，能够在 RocksDB 出错的情况下，最大的减少我们的损失。
