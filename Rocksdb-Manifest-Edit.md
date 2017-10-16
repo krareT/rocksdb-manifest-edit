@@ -6,13 +6,13 @@ RocksDB 是 Facebook 基于 Google 开源的 LevelDB，并在此基础上加以�
 
 RocksDB 是基于 LSM tree 存储的，其包含三个基本结构：MemTable，SST file，log file。其中 MemTable 是一个内存数据结构，每当有新的数据插入时，会被插入到 MemTable 并且追加到 logfile 中，当 MemTable 被写满的时候，其中的数据会被刷新到 SST file 中。而 SST file 中的数据经过排序，可以加快键的查找。
 
-每当有一个 `Get()` 请求的时候，RocksDB 会检查可修改的 MemTable，不变的 MemTable 和 SST file 以查找 key，其中 SST file 是通过 level 来组织的。在 level 0，SST file 是基于被刷新到文件的时间排序的，它们的键的范围（被定义为 `FileMetaData.smallest` 和 `FileMetaData.largest`）会相互重叠，所以需要查找每一个在  level 0 的 SST file。但是读操作会随着 SST file 个数增加而变慢，RocksDB 通过周期性的合并文件，来保持 SST file 的个数。
+每当有一个 `Get()` 请求的时候，RocksDB 会检查可修改的 MemTable，不变的 MemTable 和 SST file 以查找 key，其中 SST file 是通过 level 来组织的。在 level 0，SST file 是基于被刷新到文件的时间排序的，它们的键的范围（被定义为 `FileMetaData.smallest` 和 `FileMetaData.largest`）会相互重叠，所以需要查找每一个在  level 0 的 SST file。周期性的 Compaction 操作会将上层的文件与下层的文件合并，这样的结果是将 level 0 的键值对沿着 LSM tree 下降。从 L1 到更低的层，SST file 被按照 key 排序，它们的键的范围不会相互重叠，所以 RocksDB 采用基于 `FileMetaData.largest` 的二分搜索，在候选的 SST file 中定位出可能包含目标键的文件。这样使得复杂度从 `O(n)` 将至 `O(log(N))`，但是读操作会随着 SST file 个数增加而变慢，RocksDB 通过周期性的合并文件，来保持 SST file 的个数。
 
 不同于 LevelDB 的单线程合并，RocksDB 支持多线程合并，而LSM 型的数据结构，最大的性能问题就出现在其合并的时间损耗上。RocksDB 在多 CPU 的环境下，多线程合并速度是 LevelDB 所无法比拟的，其速度可以比 LevelDB 快十倍或更多。每次在添加新文件和删除文件之后合并的时候，都会将这些操作记录同步到 MANIFEST 文件中，所以 MANIFEST 文件中记录了数据库的状态。
 
 ## MANIFEST 文件
 
-因为文件系统不是原子性的，而这在系统出错的情况下容易导致不一致的情况出现，即使是开启了日志，依旧不能保证 RocksDB 的一致性，且 POSIX 文件系统不支持原子的批量操作，所以其使用 MANIFEST 文件来记录 RocksDB 状态的变化。
+因为文件系统操作不是原子性的，而这在系统出错的情况下容易导致不一致的情况出现，即使是开启了日志，依旧不能保证 RocksDB 的一致性，且 POSIX 文件系统不支持原子的批量操作，所以其使用 MANIFEST 文件来记录 RocksDB 状态的变化。
 
 在系统启动或者重启时，最新的 MANIFEST 日志文件包含与 RocksDB 一致的状态，任何一个后来的状态改变都会被写入到 MANIFEST 日志文件中。当一个 MANIFEST 文件超过了配置的最大值的时候，一个包含当前 RocksDB 状态信息的新的 MANIFEST 文件就会创建，CURRENT 文件会记录最新的 MANIFEST 文件信息。当所有的更改都同步到文件系统之后，之前老的 MANIFEST 文件就会被清除。
 
