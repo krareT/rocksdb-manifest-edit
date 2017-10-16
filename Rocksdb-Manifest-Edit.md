@@ -16,7 +16,7 @@ RocksDB 是基于 LSM tree 存储的，其包含三个基本结构：MemTable，
 
 在系统启动或者重启时，最新的 MANIFEST 日志文件包含与 RocksDB 一致的状态，任何一个后来的状态改变都会被写入到 MANIFEST 日志文件中。当一个 MANIFEST 文件超过了配置的最大值的时候，一个包含当前 RocksDB 状态信息的新的 MANIFEST 文件就会创建，CURRENT 文件会记录最新的 MANIFEST 文件信息。当所有的更改都同步到文件系统之后，之前老的 MANIFEST 文件就会被清除。
 
-在任意时间，RocksDB 的一个确定的状态可以被看成是一个 Version (或者说快照），每一个对 Version 的修改都看做是 VersionEdit，一个 Version 是由 VersionEdit 序列所构造而成。所以实际上，一个 MANIFEST 就是由 VersionEdit 序列构成的。
+在任意时间，RocksDB 的一个确定的状态可以被看成是一个 [`Version`](https://github.com/Terark/rocksdb/blob/v5.3.3.terark/db/version_set.h#L611) (或者说快照），每一个对 Version 的修改都看做是 [`VersionEdit`](https://github.com/Terark/rocksdb/blob/v5.3.3.terark/db/version_edit.h#L148)，一个 Version 是由 VersionEdit 序列所构造而成。所以实际上，一个 MANIFEST 就是由 VersionEdit 序列构成的。
 
 ## 为什么要解析 MANIFEST 文件
 
@@ -42,7 +42,7 @@ RocksDB 本身实际上提供了一个修复 MANIFEST 的方式，就是使用 l
 
 我们解析 MANIFEST 文件的目的是为了能够对 MANIFEST 文件进行修改修复使得整个数据库能够更健壮，即使丢了部分数据或者损失了部分数据也能够取出剩下的数据。所以当我们解析完成 MANIFEST 文件之后，我们需要把解析完成的 JSON 转换回 MANIFEST 文件。
 
-我们知道 MANIFEST 实际上存储的是 VersionEdit 序列的二进制形式，所以我们首先需要从 JSON 解析回 VersionEdit，之后再将其转换为二进制形式。将 JSON 解析成 VersionEdit 并不难，nlohmann 开源的 json 库本身能够直接从 json 类型的文件读取出 JSON，所以我们只需要遍历 JSON，依照键将其存入 VersionEdit 便可以得到我们想要的 VersionEdit 了。
+我们知道 MANIFEST 实际上存储的是 VersionEdit 序列的二进制形式，所以我们首先需要从 JSON 解析回 VersionEdit，之后再将其转换为二进制形式。将 JSON 解析成 VersionEdit 并不难，[nlohmann 开源的 json 库](https://github.com/nlohmann/json) 本身能够直接从 json 类型的文件读取出 JSON，所以我们只需要遍历 JSON，依照键将其存入 VersionEdit 便可以得到我们想要的 VersionEdit 了。
 
 但是实际操作上，依旧不能直接将值直接存入 VersionEdit 中，部分值仍然需要经过处理才可以存入 VersionEdit 中，比如 VersionEdit 中的 InternalKey，在写入到 JSON 的时候，是将其中的二进制转换为十六进制字符串存储在 JSON 中的，所以存入到 InternalKey 的时候，同样需要将其转换为二进制。
 
@@ -56,6 +56,6 @@ RocksDB 本身实际上提供了一个修复 MANIFEST 的方式，就是使用 l
 
 ## 总结
 
-尽管 RocksDB 是一个非常优秀、性能非常突出的数据库存储引擎，但是因为文件系统不是原子性的，POSIX 系统也不支持原子的批量操作，所以 RocksDB 并不会将自己的一些元数据存放到自己的 key-value 系统里面，而是使用了单独的一个 MANIFEST 文件。而当 MANIFEST 文件出错，或者是 SST file 出错的情况下，如果我们没有能够修改修复 MANIFEST 文件的能力，那么就会使得 RocksDB 中存储的所有数据都会作废。这是我们所不能接受的。
+尽管 RocksDB 是一个非常优秀、性能非常突出的数据库存储引擎，但是因为文件系统操作不是原子性的，POSIX 系统也不支持原子的批量操作，所以 RocksDB 并不会将自己的一些元数据存放到自己的 key-value 系统里面，而是使用了单独的一个 MANIFEST 文件。而当 MANIFEST 文件出错，或者是 SST file 出错的情况下，如果我们没有能够修改修复 MANIFEST 文件的能力，那么就会使得 RocksDB 中存储的所有数据都会作废。这是我们所不能接受的。
 
 所以编写这个项目，使得我们具备了修改修复 MANIFEST 文件的能力，能够在 RocksDB 出错的情况下，最大的减少我们的损失。
