@@ -6,7 +6,7 @@ RocksDB 是 Facebook 基于 Google 开源的 LevelDB，并在此基础上加以�
 
 RocksDB 是基于 LSM tree 存储的，其包含三个基本结构：MemTable，SST file，log file。其中 MemTable 是一个内存数据结构，每当有新的数据插入时，会被插入到 MemTable 并且追加到 logfile 中，当 MemTable 被写满的时候，其中的数据会被刷新到 SST file 中。而 SST file 中的数据经过排序，可以加快键的查找。
 
-每当有一个 `Get()` 请求的时候，RocksDB 会检查可修改的 MemTable，不变的 MemTable 和 SST file 以查找 key，其中 SST file 是通过 level 来组织的。在 level 0，SST file 是基于被刷新到文件的时间排序的，它们的键的范围（被定义为 `FileMetaData.smallest` 和 `FileMetaData.largest`）会相互重叠，所以需要查找每一个在  level 0 的 SST file。周期性的 Compaction 操作会将上层的文件与下层的文件合并，这样的结果是 level 0 的键值对将沿着 LSM tree 下降到更低的层。从 L1 到更低的层，SST file 被按照 key 排序，它们的键的范围不会相互重叠，所以 RocksDB 采用基于 `FileMetaData.largest` 的二分搜索，在候选的 SST file 中定位出可能包含目标键的文件。这样使得复杂度从 `O(n)` 降至 `O(log(N))`，但是读操作会随着 SST file 个数增加而变慢，RocksDB 通过周期性的合并文件，来保持 SST file 的个数。
+每当有一个 `Get()` 请求的时候，RocksDB 会检查可修改的 MemTable，不变的 MemTable 和 SST file 以查找 key，其中 SST file 是通过 level 来组织的。在 level 0，SST file 是基于被刷新到文件的时间排序的，它们的键的范围（被定义为 `FileMetaData.smallest` 和 `FileMetaData.largest`）会相互重叠，所以需要查找每一个在  level 0 的 SST file。周期性的 Compaction 操作会将上层的文件与下层的文件合并，这样的结果是 level 0 的键值对将沿着 LSM tree 下降到更低的层。从 L1 到更低的层，SST file 被按照 key 排序，它们的键的范围不会相互重叠，所以 RocksDB 采用基于 `FileMetaData.largest` 的二分搜索，在候选的 SST file 中定位出可能包含目标键的文件。这样使得复杂度从 `O(n)` 降至 `O(log(N))`。
 
 不同于 LevelDB 的单线程合并，RocksDB 支持多线程合并，而LSM 型的数据结构，最大的性能问题就出现在其合并的时间损耗上。RocksDB 在多 CPU 的环境下，多线程合并速度是 LevelDB 所无法比拟的，其速度可以比 LevelDB 快十倍或更多。每次在添加新文件和删除文件之后合并的时候，都会将这些操作记录同步到 MANIFEST 文件中，所以 MANIFEST 文件中记录了数据库的状态。
 
@@ -48,7 +48,7 @@ RocksDB 本身实际上提供了一个修复 MANIFEST 的方式，就是使用 l
 
 在得到所需的 VersionEdit 的时候，我们并不需要自己再一点一点的将 VersionEdit 编码成二进制形式，只需要调用 RocksDB 自身提供的函数 `bool EncodeTo(std::string* dst)` 即可。当所有的 VersionEdit 都被编码完成之后，写入到 MANIFEST 文件即可。
 
-写入到 MANIFEST 文件并不是一件简单的事情，如果直接将 VersionEdit 编码完成的二进制字符串写入到 MANIFEST 文件中实际上会造成 MANIFEST 文件信息的部分丢失，所以采用 RocksDB 中自有的方法。利用 VersionSet 中的 `log_descriptor` 的 `AddRecord()` 方法先将每个 VersionEdit 编码后的二进制字符串记录，等所有的 VersionEdit 编码完成后，使用 `SyncManifest()` 函数便可以将所有的记录写入到 MANIFEST 文件中。
+写入到 MANIFEST 文件并不是一件简单的事情，如果直接将 VersionEdit 编码完成的二进制字符串写入到 MANIFEST 文件中实际上会造成 MANIFEST 文件信息的部分丢失，所以采用 RocksDB 中自有的方法。利用 [`VersionSet`](https://github.com/Terark/rocksdb/blob/v5.3.3.terark/db/version_set.h#L611) 中的 `log_descriptor` 的 `AddRecord()` 方法先将每个 VersionEdit 编码后的二进制字符串记录，等所有的 VersionEdit 编码完成后，使用 `SyncManifest()` 函数便可以将所有的记录写入到 MANIFEST 文件中。
 
 ## 其它功能
 
